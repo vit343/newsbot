@@ -1,0 +1,111 @@
+{
+  "cbr": {
+    "url": "https://www.cbr.ru/rss/main/",
+    "priority": 1,
+    "category": "ЦБ РФ",
+    "keywords": [
+      "ключевая ставка",
+      "валютное регулирование",
+      "денежно-кредитная политика"
+    ],
+    "enabled": true
+  },
+  "rbc": {
+    "url": "https://rbc.ru/rss/index.rss",
+    "priority": 2,
+    "category": "РБК",
+    "keywords": [],
+    "enabled": true
+  },
+  "interfax": {
+    "url": "https://www.interfax.ru/rss.asp",
+    "priority": 2,
+    "category": "Интерфакс",
+    "keywords": [],
+    "enabled": true
+  },
+  "vedomosti": {
+    "url": "https://www.vedomosti.ru/rss/news",
+    "priority": 2,
+    "category": "Ведомости",
+    "keywords": [],
+    "enabled": true
+  },
+  "kommersant": {
+    "url": "https://www.kommersant.ru/RSS/main.xml",
+    "priority": 2,
+    "category": "Коммерсант",
+    "keywords": [],
+    "enabled": true
+  },
+  "finmarket": {
+    "url": "https://www.finmarket.ru/rss/mainnews.xml",
+    "priority": 2,
+    "category": "Финмаркет",
+    "keywords": [],
+    "enabled": true
+  },
+  "MOEX": {
+    "url": "https://www.moex.com/ru/news/rss.aspx",
+    "category": "MOEX",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "FINAM": {
+    "url": "https://www.finam.ru/quote/moex/imoex/publications/rss/",
+    "category": "FINAM",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "Investing": {
+    "url": "https://ru.investing.com/rss/news.rss",
+    "category": "Investing",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "Finmarket": {
+    "url": "https://www.finmarket.ru/rss/shares.xml",
+    "category": "Finmarket",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "Риком ТРАСТ": {
+    "url": "https://www.ricom.ru/about/press/170/",
+    "category": "Риком ТРАСТ",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "LentaRU": {
+    "url": "https://lenta.ru/tags/organizations/moskovskaya-birzha/",
+    "category": "LentaRU",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "SMI2": {
+    "url": "https://smi2.ru/",
+    "category": "SMI@",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "SmartLab": {
+    "url": "https://smart-lab.ru/my/RSS/comment/page8",
+    "category": "SmartLab",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  },
+  "Smart-Lab": {
+    "url": "https://smart-lab.ru/rss/",
+    "category": "Smart-Lab",
+    "priority": 2,
+    "keywords": [],
+    "enabled": true
+  }
+}
