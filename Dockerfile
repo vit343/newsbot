@@ -1,15 +1,19 @@
-# Используем Python 3.10
+# Указываем базовый образ Python
 FROM python:3.10-slim
 
-# Устанавливаем рабочую директорию
+# Создаём рабочую директорию
 WORKDIR /app
 
 # Копируем все файлы проекта в контейнер
-COPY . .
+COPY . /app
 
-# Обновляем pip и устанавливаем зависимости
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Указываем порт (если нужен для вебхука или Flask)
+EXPOSE 80
 
 # Команда запуска бота
 CMD ["python", "main.py"]
+
+
