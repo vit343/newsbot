@@ -5,7 +5,7 @@ import logging
 import os
 from natasha import Segmenter, NewsEmbedding, NewsMorphTagger, MorphVocab, Doc
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Set
 import json
 from dataclasses import dataclass
@@ -20,6 +20,9 @@ segmenter = Segmenter()
 emb = NewsEmbedding()
 morph_tagger = NewsMorphTagger(emb)
 morph_vocab = MorphVocab()
+
+# Самарская timezone (GMT+4)
+SAMARA_TZ = timezone(timedelta(hours=4))
 
 # Настройка логирования
 logging.basicConfig(
@@ -261,10 +264,13 @@ class RussianMarketNewsBot:
         emoji = priority_emoji.get(news.priority, '📰')
         source_emoji = category_emoji.get(news.category, '📰')
         
+        # Конвертируем время в самарское
+        samara_time = news.timestamp.astimezone(SAMARA_TZ)
+        
         message = f"{emoji} {source_emoji} <b>{news.source}</b>\n\n"
         message += f"{news.title}\n\n"
         message += f"🔗 {news.url}\n"
-        message += f"⏰ {news.timestamp.strftime('%H:%M:%S')}"
+        message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
         
         return message
     
@@ -375,4 +381,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
