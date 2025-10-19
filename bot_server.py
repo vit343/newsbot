@@ -344,6 +344,25 @@ async def main():
         logging.error("❌ Не указаны TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID в переменных окружения")
         return
     
+    # Запуск HTTP сервера для предотвращения засыпания
+    from aiohttp import web
+    
+    async def health_check(request):
+        return web.Response(text="✅ Bot is alive and working!")
+    
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    port = int(os.getenv('PORT', '8080'))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logging.info(f"🌐 HTTP сервер запущен на порту {port}")
+    
+    # Запуск бота
     bot = RussianMarketNewsBot(bot_token, chat_id)
     
     try:
@@ -356,3 +375,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
