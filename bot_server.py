@@ -1,3 +1,4 @@
+
 import asyncio
 import aiohttp
 import feedparser
@@ -38,15 +39,49 @@ DEFAULT_HEADERS = {
 MAX_FETCH_RETRIES = 3
 BASE_BACKOFF_SEC = 1.0
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+# Встроенные зеркала для источников (используются ТОЛЬКО если в конфиге нет alt_urls)
+MIRROR_FALLBACKS: dict[str, list[str]] = {
+    # ключи в нижнем регистре; поддерживаем как русские, так и латинские варианты названий
+    "rbc": [
+        "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+        "https://news.google.com/rss/search?q=site:rbc.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "рбк": [
+        "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+        "https://news.google.com/rss/search?q=site:rbc.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "moex": [
+        "https://www.moex.com/ru/news/rss",
+        "https://www.moex.com/en/news/rss",
+        "https://news.google.com/rss/search?q=site:moex.com&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "cbr": [
+        "https://www.cbr.ru/rss/press/",
+        "https://www.cbr.ru/eng/rss/press/",
+        "https://news.google.com/rss/search?q=site:cbr.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "цб рф": [
+        "https://www.cbr.ru/rss/press/",
+        "https://www.cbr.ru/eng/rss/press/",
+        "https://news.google.com/rss/search?q=site:cbr.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "kommersant": [
+        "https://www.kommersant.ru/RSS/news.xml",
+        "https://news.google.com/rss/search?q=site:kommersant.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "коммерсант": [
+        "https://www.kommersant.ru/RSS/news.xml",
+        "https://news.google.com/rss/search?q=site:kommersant.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "finmarket": [
+        "https://www.finmarket.ru/rss/news.xml",
+        "https://news.google.com/rss/search?q=site:finmarket.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+    "финмаркет": [
+        "https://www.finmarket.ru/rss/news.xml",
+        "https://news.google.com/rss/search?q=site:finmarket.ru&hl=ru&gl=RU&ceid=RU:ru",
+    ],
+}
 
 # Словарь синонимов
 SYNONYMS = {
@@ -208,7 +243,17 @@ class RussianMarketNewsBot:
         main_url = source_config.get('url')
         if main_url:
             urls.append(main_url)
+        # Поддержка alt_urls из пользовательского конфига
         urls.extend(source_config.get('alt_urls', []))
+        
+        # Если в конфиге alt_urls не задан, подставим встроенные зеркала для известных источников
+        if not source_config.get('alt_urls'):
+            key = source_name.lower().strip()
+            mirrors = MIRROR_FALLBACKS.get(key, [])
+            # не дублируем основной url
+            for m in mirrors:
+                if m and m not in urls:
+                    urls.append(m)
         
         last_error = None
         tried_any_success = False
@@ -222,7 +267,7 @@ class RussianMarketNewsBot:
                             content = await response.text()
                             feed = feedparser.parse(content)
                             news_items = []
-                            # помечаем как зеркало, если URL не основной или это news.google.com
+                            # если текущий URL не равен основному, считаем, что это зеркало
                             is_mirror_feed = (main_url is not None and url != main_url) or ("news.google.com" in url)
                             for entry in feed.entries[:10]:
                                 try:
@@ -262,7 +307,6 @@ class RussianMarketNewsBot:
                             tried_any_success = True
                             return news_items
                         else:
-                            # Не шумим в логах на каждом промахе: предупреждаем и пробуем альтернативы/ретраи
                             if status in (404, 406):
                                 logging.warning(f"{source_name}: HTTP {status}. URL: {url}. Попытка {attempt}/{MAX_FETCH_RETRIES}. Пробую альтернативу/повтор…")
                             elif status in (403, 451):
@@ -277,41 +321,11 @@ class RussianMarketNewsBot:
                 if attempt < MAX_FETCH_RETRIES:
                     backoff = BASE_BACKOFF_SEC * (2 ** (attempt - 1))
                     await asyncio.sleep(backoff)
-            # переход к следующему URL после исчерпания ретраев
         
         if not tried_any_success:
             tried_list = ", ".join(urls) if urls else "<пусто>"
             logging.error(f"{source_name}: не удалось получить ленту после всех попыток. Последняя ошибка: {last_error}. Пробованные URL: {tried_list}")
         return []
-    
-    def format_news_message(self, news: NewsItem) -> str:
-        priority_emoji = {1: '🚨', 2: '⚡', 3: '📊', 4: '📰'}
-        category_emoji = {
-            'ЦБ РФ': '🏦',
-            'Кремль': '🏛️',
-            'РБК': '📺',
-            'Интерфакс': '📡',
-            'Ведомости': '📰',
-            'Коммерсант': '💼',
-            'Финмаркет': '📈',
-            'Банки.ру': '🏧'
-        }
-        
-        emoji = priority_emoji.get(news.priority, '📰')
-        source_emoji = category_emoji.get(news.category, '📰')
-        
-        # Конвертируем время в самарское
-        samara_time = news.timestamp.astimezone(SAMARA_TZ)
-
-        # пометка: если новость пришла через зеркало
-        mirror_note = " · via зеркало" if news.via_mirror else ""
-        
-        message = f"{emoji} {source_emoji} <b>{news.source}</b>{mirror_note}\n\n"
-        message += f"{news.title}\n\n"
-        message += f"🔗 {news.url}\n"
-        message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
-        
-        return message
     
     async def send_telegram_message(self, session: aiohttp.ClientSession, message: str):
         try:
@@ -359,6 +373,34 @@ class RussianMarketNewsBot:
                     await asyncio.sleep(0.5)
                 else:
                     await asyncio.sleep(2)
+    
+    def format_news_message(self, news: NewsItem) -> str:
+        priority_emoji = {1: '🚨', 2: '⚡', 3: '📊', 4: '📰'}
+        category_emoji = {
+            'ЦБ РФ': '🏦',
+            'Кремль': '🏛️',
+            'РБК': '📺',
+            'Интерфакс': '📡',
+            'Ведомости': '📰',
+            'Коммерсант': '💼',
+            'Финмаркет': '📈',
+            'Банки.ру': '🏧'
+        }
+        
+        emoji = priority_emoji.get(news.priority, '📰')
+        source_emoji = category_emoji.get(news.category, '📰')
+        
+        # Конвертируем время в самарское
+        samara_time = news.timestamp.astimezone(SAMARA_TZ)
+        
+        mirror_note = " \u00b7 via зеркало" if news.via_mirror else ""
+        
+        message = f"{emoji} {source_emoji} <b>{news.source}</b>{mirror_note}\n\n"
+        message += f"{news.title}\n\n"
+        message += f"🔗 {news.url}\n"
+        message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
+        
+        return message
     
     async def run_monitoring(self, interval_minutes: int = 2):
         logging.info(f"🚀 Запуск мониторинга российского фондового рынка (интервал: {interval_minutes} мин)")
@@ -422,7 +464,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 
 
 
