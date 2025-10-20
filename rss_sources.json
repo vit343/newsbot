@@ -1,9 +1,9 @@
 {
   "cbr": {
-    "url": "https://www.cbr.ru/rss/press/",
+    "url": "https://news.google.com/rss/search?q=site:cbr.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://www.cbr.ru/eng/rss/press/",
-      "https://news.google.com/rss/search?q=site:cbr.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.cbr.ru/rss/press/",
+      "https://www.cbr.ru/eng/rss/press/"
     ],
     "priority": 1,
     "category": "ЦБ РФ",
@@ -15,9 +15,9 @@
     "enabled": true
   },
   "rbc": {
-    "url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+    "url": "https://news.google.com/rss/search?q=site:rbc.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://news.google.com/rss/search?q=site:rbc.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://rssexport.rbc.ru/rbcnews/news/30/full.rss"
     ],
     "priority": 2,
     "category": "РБК",
@@ -25,9 +25,9 @@
     "enabled": true
   },
   "interfax": {
-    "url": "https://www.interfax.ru/rss.asp",
+    "url": "https://news.google.com/rss/search?q=site:interfax.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://news.google.com/rss/search?q=site:interfax.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.interfax.ru/rss.asp"
     ],
     "priority": 2,
     "category": "Интерфакс",
@@ -42,9 +42,9 @@
     "enabled": true
   },
   "kommersant": {
-    "url": "https://www.kommersant.ru/RSS/news.xml",
+    "url": "https://news.google.com/rss/search?q=site:kommersant.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://news.google.com/rss/search?q=site:kommersant.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.kommersant.ru/RSS/news.xml"
     ],
     "priority": 3,
     "category": "Коммерсант",
@@ -52,9 +52,9 @@
     "enabled": true
   },
   "finmarket": {
-    "url": "https://www.finmarket.ru/rss/news.xml",
+    "url": "https://news.google.com/rss/search?q=site:finmarket.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://news.google.com/rss/search?q=site:finmarket.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.finmarket.ru/rss/news.xml"
     ],
     "priority": 3,
     "category": "Финмаркет",
@@ -62,10 +62,10 @@
     "enabled": true
   },
   "MOEX": {
-    "url": "https://www.moex.com/ru/news/rss",
+    "url": "https://news.google.com/rss/search?q=site:moex.com&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://www.moex.com/en/news/rss",
-      "https://news.google.com/rss/search?q=site:moex.com&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.moex.com/ru/news/rss",
+      "https://www.moex.com/en/news/rss"
     ],
     "category": "MOEX",
     "priority": 3,
@@ -73,9 +73,9 @@
     "enabled": true
   },
   "FINAM": {
-    "url": "https://www.finam.ru/analysis/conews/rsspoint/",
+    "url": "https://news.google.com/rss/search?q=site:finam.ru&hl=ru&gl=RU&ceid=RU:ru",
     "alt_urls": [
-      "https://news.google.com/rss/search?q=site:finam.ru&hl=ru&gl=RU&ceid=RU:ru"
+      "https://www.finam.ru/analysis/conews/rsspoint/"
     ],
     "category": "FINAM",
     "priority": 3,
