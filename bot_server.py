@@ -1,4 +1,3 @@
-
 import asyncio
 import aiohttp
 import feedparser
@@ -11,6 +10,7 @@ from typing import List, Dict, Set
 import json
 from dataclasses import dataclass
 import hashlib
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Загрузка переменных окружения
@@ -254,6 +254,11 @@ class RussianMarketNewsBot:
             for m in mirrors:
                 if m and m not in urls:
                     urls.append(m)
+        # Дополнительно: динамически построить зеркала из домена основного URL
+        if main_url:
+            for m in build_dynamic_mirrors(main_url, source_name):
+                if m not in urls:
+                    urls.append(m)
         
         last_error = None
         tried_any_success = False
@@ -423,6 +428,31 @@ class RussianMarketNewsBot:
         self.is_running = False
         logging.info("⏹️ Мониторинг остановлен")
 
+# Построение динамических зеркал на основе домена основного URL
+def build_dynamic_mirrors(main_url: str, source_name: str) -> list[str]:
+    mirrors: list[str] = []
+    try:
+        parsed = urlparse(main_url)
+        host = parsed.netloc or ""
+        host = host.replace("www.", "")
+        if host:
+            # Универсальное зеркало через Google News по домену
+            mirrors.append(
+                f"https://news.google.com/rss/search?q=site:{host}&hl=ru&gl=RU&ceid=RU:ru"
+            )
+        # Специальные доменные альтернативы, если известны
+        if "moex.com" in host and main_url.endswith("rss.aspx"):
+            mirrors.append("https://www.moex.com/ru/news/rss")
+            mirrors.append("https://www.moex.com/en/news/rss")
+        if "cbr.ru" in host and "/rss/main" in main_url:
+            mirrors.append("https://www.cbr.ru/rss/press/")
+            mirrors.append("https://www.cbr.ru/eng/rss/press/")
+        if "kommersant.ru" in host and main_url.endswith("/RSS/main.xml"):
+            mirrors.append("https://www.kommersant.ru/RSS/news.xml")
+    except Exception:
+        pass
+    return [m for m in mirrors if m]
+
 async def main():
     # Получение настроек из переменных окружения
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -464,7 +494,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
