@@ -30,12 +30,23 @@ DEFAULT_HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/;q=0.8",
+    # Включаем RSS/XML mime-типы, чтобы избежать 406 (Not Acceptable)
+    "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8, */*;q=0.7",
     "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
     "Cache-Control": "no-cache",
 }
 MAX_FETCH_RETRIES = 3
 BASE_BACKOFF_SEC = 1.0
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
 
 # Словарь синонимов
 SYNONYMS = {
@@ -80,6 +91,7 @@ class NewsItem:
     category: str
     timestamp: datetime
     hash: str
+    via_mirror: bool = False  # получена через зеркало (alt_urls), например Google News
 
 class RussianMarketNewsBot:
     def __init__(self, bot_token: str, chat_id: str):
@@ -193,14 +205,13 @@ class RussianMarketNewsBot:
             return []
         
         urls: List[str] = []
-        # Поддержка альтернативных URL: { "url": "...", "alt_urls": ["...", "..."] }
         main_url = source_config.get('url')
         if main_url:
             urls.append(main_url)
         urls.extend(source_config.get('alt_urls', []))
         
-        # Ретраи по URL и по попыткам с экспоненциальным бэкофом
         last_error = None
+        tried_any_success = False
         for url in urls:
             for attempt in range(1, MAX_FETCH_RETRIES + 1):
                 try:
@@ -210,8 +221,9 @@ class RussianMarketNewsBot:
                         if status == 200:
                             content = await response.text()
                             feed = feedparser.parse(content)
-
                             news_items = []
+                            # помечаем как зеркало, если URL не основной или это news.google.com
+                            is_mirror_feed = (main_url is not None and url != main_url) or ("news.google.com" in url)
                             for entry in feed.entries[:10]:
                                 try:
                                     title = entry.get('title', '')
@@ -239,36 +251,67 @@ class RussianMarketNewsBot:
                                         priority=priority,
                                         category=source_config.get('category', source_name),
                                         timestamp=pub_date,
-                                        hash=news_hash
+                                        hash=news_hash,
+                                        via_mirror=is_mirror_feed
                                     )
                                     self.seen_news.add(news_hash)
                                     news_items.append(news_item)
                                 except Exception as e:
                                     logging.error(f"Ошибка обработки новости из {source_name}: {e}")
                                     continue
+                            tried_any_success = True
                             return news_items
                         else:
-                            # Специальные логи на геоблок/антибот
-                            if status in (403, 451):
-                                logging.error(f"{source_name}: доступ ограничен (HTTP {status}). Возможен геоблок/антибот. URL: {url}")
-                            elif status == 404:
-                                logging.error(f"{source_name}: ресурс не найден (HTTP 404). URL: {url}")
+                            # Не шумим в логах на каждом промахе: предупреждаем и пробуем альтернативы/ретраи
+                            if status in (404, 406):
+                                logging.warning(f"{source_name}: HTTP {status}. URL: {url}. Попытка {attempt}/{MAX_FETCH_RETRIES}. Пробую альтернативу/повтор…")
+                            elif status in (403, 451):
+                                logging.warning(f"{source_name}: доступ ограничен (HTTP {status}). URL: {url}. Попробую альтернативный источник…")
                             else:
-                                logging.error(f"Ошибка загрузки {source_name}: HTTP {status} URL: {url}")
+                                logging.warning(f"{source_name}: временная ошибка (HTTP {status}). URL: {url}. Попытка {attempt}/{MAX_FETCH_RETRIES}…")
                             last_error = f"HTTP {status}"
                 except Exception as e:
                     last_error = str(e)
-                    logging.error(f"Ошибка загрузки RSS {source_name} c URL {url} (попытка {attempt}/{MAX_FETCH_RETRIES}): {e}")
+                    logging.warning(f"{source_name}: ошибка запроса URL {url} (попытка {attempt}/{MAX_FETCH_RETRIES}): {e}")
                 
-                # Бэкоф между повторами
                 if attempt < MAX_FETCH_RETRIES:
                     backoff = BASE_BACKOFF_SEC * (2 ** (attempt - 1))
                     await asyncio.sleep(backoff)
-            # если по этому URL не удалось — пробуем следующий из alt_urls
+            # переход к следующему URL после исчерпания ретраев
         
-        # Все попытки и URL исчерпаны
-        logging.error(f"{source_name}: не удалось получить ленту. Последняя ошибка: {last_error}")
+        if not tried_any_success:
+            tried_list = ", ".join(urls) if urls else "<пусто>"
+            logging.error(f"{source_name}: не удалось получить ленту после всех попыток. Последняя ошибка: {last_error}. Пробованные URL: {tried_list}")
         return []
+    
+    def format_news_message(self, news: NewsItem) -> str:
+        priority_emoji = {1: '🚨', 2: '⚡', 3: '📊', 4: '📰'}
+        category_emoji = {
+            'ЦБ РФ': '🏦',
+            'Кремль': '🏛️',
+            'РБК': '📺',
+            'Интерфакс': '📡',
+            'Ведомости': '📰',
+            'Коммерсант': '💼',
+            'Финмаркет': '📈',
+            'Банки.ру': '🏧'
+        }
+        
+        emoji = priority_emoji.get(news.priority, '📰')
+        source_emoji = category_emoji.get(news.category, '📰')
+        
+        # Конвертируем время в самарское
+        samara_time = news.timestamp.astimezone(SAMARA_TZ)
+
+        # пометка: если новость пришла через зеркало
+        mirror_note = " · via зеркало" if news.via_mirror else ""
+        
+        message = f"{emoji} {source_emoji} <b>{news.source}</b>{mirror_note}\n\n"
+        message += f"{news.title}\n\n"
+        message += f"🔗 {news.url}\n"
+        message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
+        
+        return message
     
     async def send_telegram_message(self, session: aiohttp.ClientSession, message: str):
         try:
@@ -316,32 +359,6 @@ class RussianMarketNewsBot:
                     await asyncio.sleep(0.5)
                 else:
                     await asyncio.sleep(2)
-    
-    def format_news_message(self, news: NewsItem) -> str:
-        priority_emoji = {1: '🚨', 2: '⚡', 3: '📊', 4: '📰'}
-        category_emoji = {
-            'ЦБ РФ': '🏦',
-            'Кремль': '🏛️',
-            'РБК': '📺',
-            'Интерфакс': '📡',
-            'Ведомости': '📰',
-            'Коммерсант': '💼',
-            'Финмаркет': '📈',
-            'Банки.ру': '🏧'
-        }
-        
-        emoji = priority_emoji.get(news.priority, '📰')
-        source_emoji = category_emoji.get(news.category, '📰')
-        
-        # Конвертируем время в самарское
-        samara_time = news.timestamp.astimezone(SAMARA_TZ)
-        
-        message = f"{emoji} {source_emoji} <b>{news.source}</b>\n\n"
-        message += f"{news.title}\n\n"
-        message += f"🔗 {news.url}\n"
-        message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
-        
-        return message
     
     async def run_monitoring(self, interval_minutes: int = 2):
         logging.info(f"🚀 Запуск мониторинга российского фондового рынка (интервал: {interval_minutes} мин)")
