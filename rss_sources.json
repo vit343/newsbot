@@ -1,10 +1,7 @@
+
 {
   "cbr": {
-    "url": "https://news.google.com/rss/search?q=site:cbr.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.cbr.ru/rss/press/",
-      "https://www.cbr.ru/eng/rss/press/"
-    ],
+    "url": "https://www.cbr.ru/rss/main/",
     "priority": 1,
     "category": "ЦБ РФ",
     "keywords": [
@@ -15,20 +12,14 @@
     "enabled": true
   },
   "rbc": {
-    "url": "https://news.google.com/rss/search?q=site:rbc.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://rssexport.rbc.ru/rbcnews/news/30/full.rss"
-    ],
+    "url": "https://rbc.ru/rss/index.rss",
     "priority": 2,
     "category": "РБК",
     "keywords": [],
     "enabled": true
   },
   "interfax": {
-    "url": "https://news.google.com/rss/search?q=site:interfax.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.interfax.ru/rss.asp"
-    ],
+    "url": "https://www.interfax.ru/rss.asp",
     "priority": 2,
     "category": "Интерфакс",
     "keywords": [],
@@ -42,43 +33,30 @@
     "enabled": true
   },
   "kommersant": {
-    "url": "https://news.google.com/rss/search?q=site:kommersant.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.kommersant.ru/RSS/news.xml"
-    ],
-    "priority": 3,
+    "url": "https://www.kommersant.ru/RSS/main.xml",
+    "priority": 2,
     "category": "Коммерсант",
     "keywords": [],
     "enabled": true
   },
   "finmarket": {
-    "url": "https://news.google.com/rss/search?q=site:finmarket.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.finmarket.ru/rss/news.xml"
-    ],
-    "priority": 3,
+    "url": "https://www.finmarket.ru/rss/mainnews.xml",
+    "priority": 2,
     "category": "Финмаркет",
     "keywords": [],
     "enabled": true
   },
   "MOEX": {
-    "url": "https://news.google.com/rss/search?q=site:moex.com&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.moex.com/ru/news/rss",
-      "https://www.moex.com/en/news/rss"
-    ],
+    "url": "https://www.moex.com/ru/news/rss.aspx",
     "category": "MOEX",
-    "priority": 3,
+    "priority": 2,
     "keywords": [],
     "enabled": true
   },
   "FINAM": {
-    "url": "https://news.google.com/rss/search?q=site:finam.ru&hl=ru&gl=RU&ceid=RU:ru",
-    "alt_urls": [
-      "https://www.finam.ru/analysis/conews/rsspoint/"
-    ],
+    "url": "https://www.finam.ru/quote/moex/imoex/publications/rss/",
     "category": "FINAM",
-    "priority": 3,
+    "priority": 2,
     "keywords": [],
     "enabled": true
   },
