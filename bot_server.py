@@ -24,15 +24,18 @@ morph_vocab = MorphVocab()
 # Самарская timezone (GMT+4)
 SAMARA_TZ = timezone(timedelta(hours=4))
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+# Глобальные HTTP заголовки и параметры повторов для обхода простых антибот-защит
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+}
+MAX_FETCH_RETRIES = 3
+BASE_BACKOFF_SEC = 1.0
 
 # Словарь синонимов
 SYNONYMS = {
@@ -189,64 +192,130 @@ class RussianMarketNewsBot:
         if not source_config.get('enabled', True):
             return []
         
-        try:
-            async with session.get(source_config['url'], timeout=aiohttp.ClientTimeout(total=30)) as response:
-                if response.status != 200:
-                    logging.error(f"Ошибка загрузки {source_name}: HTTP {response.status}")
-                    return []
-                
-                content = await response.text()
-                feed = feedparser.parse(content)
-                
-                news_items = []
-                for entry in feed.entries[:10]:
-                    try:
-                        title = entry.get('title', '')
-                        link = entry.get('link', '')
-                        description = entry.get('description', '')
-                        
-                        if not title or not link:
-                            continue
-                        
-                        if not self.apply_filters(title):
-                            continue
-                        
-                        news_hash = hashlib.md5(link.encode()).hexdigest()
-                        if news_hash in self.seen_news:
-                            continue
-                        
-                        published = entry.get('published_parsed')
-                        if published:
-                            pub_date = datetime(*published[:6])
-                            if datetime.now() - pub_date > timedelta(hours=24):
-                                continue
+        urls: List[str] = []
+        # Поддержка альтернативных URL: { "url": "...", "alt_urls": ["...", "..."] }
+        main_url = source_config.get('url')
+        if main_url:
+            urls.append(main_url)
+        urls.extend(source_config.get('alt_urls', []))
+        
+        # Ретраи по URL и по попыткам с экспоненциальным бэкофом
+        last_error = None
+        for url in urls:
+            for attempt in range(1, MAX_FETCH_RETRIES + 1):
+                try:
+                    timeout = aiohttp.ClientTimeout(total=30)
+                    async with session.get(url, timeout=timeout) as response:
+                        status = response.status
+                        if status == 200:
+                            content = await response.text()
+                            feed = feedparser.parse(content)
+
+                            news_items = []
+                            for entry in feed.entries[:10]:
+                                try:
+                                    title = entry.get('title', '')
+                                    link = entry.get('link', '')
+                                    description = entry.get('description', '')
+                                    if not title or not link:
+                                        continue
+                                    if not self.apply_filters(title):
+                                        continue
+                                    news_hash = hashlib.md5(link.encode()).hexdigest()
+                                    if news_hash in self.seen_news:
+                                        continue
+                                    published = entry.get('published_parsed')
+                                    if published:
+                                        pub_date = datetime(*published[:6])
+                                        if datetime.now() - pub_date > timedelta(hours=24):
+                                            continue
+                                    else:
+                                        pub_date = datetime.now()
+                                    priority = self.calculate_priority(title, description, source_config.get('priority', 3))
+                                    news_item = NewsItem(
+                                        title=title,
+                                        url=link,
+                                        source=source_name,
+                                        priority=priority,
+                                        category=source_config.get('category', source_name),
+                                        timestamp=pub_date,
+                                        hash=news_hash
+                                    )
+                                    self.seen_news.add(news_hash)
+                                    news_items.append(news_item)
+                                except Exception as e:
+                                    logging.error(f"Ошибка обработки новости из {source_name}: {e}")
+                                    continue
+                            return news_items
                         else:
-                            pub_date = datetime.now()
-                        
-                        priority = self.calculate_priority(title, description, source_config.get('priority', 3))
-                        
-                        news_item = NewsItem(
-                            title=title,
-                            url=link,
-                            source=source_name,
-                            priority=priority,
-                            category=source_config.get('category', source_name),
-                            timestamp=pub_date,
-                            hash=news_hash
-                        )
-                        
-                        self.seen_news.add(news_hash)
-                        news_items.append(news_item)
-                        
-                    except Exception as e:
-                        logging.error(f"Ошибка обработки новости из {source_name}: {e}")
-                        continue
+                            # Специальные логи на геоблок/антибот
+                            if status in (403, 451):
+                                logging.error(f"{source_name}: доступ ограничен (HTTP {status}). Возможен геоблок/антибот. URL: {url}")
+                            elif status == 404:
+                                logging.error(f"{source_name}: ресурс не найден (HTTP 404). URL: {url}")
+                            else:
+                                logging.error(f"Ошибка загрузки {source_name}: HTTP {status} URL: {url}")
+                            last_error = f"HTTP {status}"
+                except Exception as e:
+                    last_error = str(e)
+                    logging.error(f"Ошибка загрузки RSS {source_name} c URL {url} (попытка {attempt}/{MAX_FETCH_RETRIES}): {e}")
                 
-                return news_items
-                
+                # Бэкоф между повторами
+                if attempt < MAX_FETCH_RETRIES:
+                    backoff = BASE_BACKOFF_SEC * (2 ** (attempt - 1))
+                    await asyncio.sleep(backoff)
+            # если по этому URL не удалось — пробуем следующий из alt_urls
+        
+        # Все попытки и URL исчерпаны
+        logging.error(f"{source_name}: не удалось получить ленту. Последняя ошибка: {last_error}")
+        return []
+    
+    async def send_telegram_message(self, session: aiohttp.ClientSession, message: str):
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            data = {
+                'chat_id': self.chat_id,
+                'text': message,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True
+            }
+            
+            async with session.post(url, json=data) as response:
+                if response.status != 200:
+                    logging.error(f"Ошибка отправки в Telegram: {await response.text()}")
+                else:
+                    logging.info(f"✅ Сообщение отправлено")
+                    
         except Exception as e:
-            logging.error(f"Ошибка загрузки RSS {source_name}: {e}")
-            return []
+            logging.error(f"Ошибка отправки сообщения: {e}")
+    
+    async def check_all_sources(self):
+        # Сессия с общими браузерными заголовками
+        timeout = aiohttp.ClientTimeout(total=40)
+        async with aiohttp.ClientSession(headers=DEFAULT_HEADERS, timeout=timeout) as session:
+            tasks = []
+            for source_name, source_config in self.rss_sources.items():
+                tasks.append(self.fetch_rss_feed(session, source_name, source_config))
+            
+            all_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            all_news = []
+            for result in all_results:
+                if isinstance(result, list):
+                    all_news.extend(result)
+            
+            all_news.sort(key=lambda x: x.priority)
+            
+            for news in all_news:
+                if not self.is_running:
+                    break
+                message = self.format_news_message(news)
+                await self.send_telegram_message(session, message)
+                
+                if news.priority == 1:
+                    await asyncio.sleep(0.5)
+                else:
+                    await asyncio.sleep(2)
     
     def format_news_message(self, news: NewsItem) -> str:
         priority_emoji = {1: '🚨', 2: '⚡', 3: '📊', 4: '📰'}
@@ -273,51 +342,6 @@ class RussianMarketNewsBot:
         message += f"⏰ {samara_time.strftime('%H:%M:%S')}"
         
         return message
-    
-    async def send_telegram_message(self, session: aiohttp.ClientSession, message: str):
-        try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-            data = {
-                'chat_id': self.chat_id,
-                'text': message,
-                'parse_mode': 'HTML',
-                'disable_web_page_preview': True
-            }
-            
-            async with session.post(url, json=data) as response:
-                if response.status != 200:
-                    logging.error(f"Ошибка отправки в Telegram: {await response.text()}")
-                else:
-                    logging.info(f"✅ Сообщение отправлено")
-                    
-        except Exception as e:
-            logging.error(f"Ошибка отправки сообщения: {e}")
-    
-    async def check_all_sources(self):
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for source_name, source_config in self.rss_sources.items():
-                tasks.append(self.fetch_rss_feed(session, source_name, source_config))
-            
-            all_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            all_news = []
-            for result in all_results:
-                if isinstance(result, list):
-                    all_news.extend(result)
-            
-            all_news.sort(key=lambda x: x.priority)
-            
-            for news in all_news:
-                if not self.is_running:
-                    break
-                message = self.format_news_message(news)
-                await self.send_telegram_message(session, message)
-                
-                if news.priority == 1:
-                    await asyncio.sleep(0.5)
-                else:
-                    await asyncio.sleep(2)
     
     async def run_monitoring(self, interval_minutes: int = 2):
         logging.info(f"🚀 Запуск мониторинга российского фондового рынка (интервал: {interval_minutes} мин)")
@@ -381,5 +405,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
